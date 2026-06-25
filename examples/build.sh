@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -ex # sex (00,)
+# Enable debug sex if you need
+# set -ex # sex (00,)
 
 script_path=$(dirname -- "$( readlink -f -- "$0"; )")
 os_name=$(uname -s)
@@ -8,9 +9,7 @@ compiler="gcc"
 cc_flags="-std=c89"
 cc_warnings="-Wall -Werror"
 
-mkdir -p build
 mkdir -p bin
-rm -rf $script_path/build/*
 rm -rf $script_path/bin/*
 
 function compile_x86_64_linux() {

@@ -1,7 +1,79 @@
+/*
+    MIT License
+
+    Copyright (c) 2026 Viacheslav Radko
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+*/
+
 #ifndef IMPARSER_H_
 #define IMPARSER_H_
 
+/*
+                            Immediate parser
+
+    This library is suppose to help you to parse some simple expressions and statements.
+    It's very easy to setup and use.
+
+    How to use:
+        - Copy this file into your source tree, and commit.
+        - Define a preprocessor macro IMPARSER_IMPLEMENTATION, and include this file into
+          some of your C files, or compile it into an object file with the compiler flag
+          -DIMPARSER_IMPLEMENTATION, then link it in your build.
+        - Include this file without implementation wherever you want to parse something.
+        - Feed your string into the imp_begin function like that:
+
+          imp_begin(source_code, sizeof(source_code));
+
+        - Use the following functions in order you expect the tokens to appear in the
+          string you fed into the library:
+
+          imp_eof
+          imp_paren_open
+          imp_paren_close
+          imp_bracket_open
+          imp_bracket_close
+          imp_brace_open
+          imp_brace_close
+          imp_colon
+          imp_semicolon
+          imp_plus
+          imp_minus
+          imp_asterics
+          imp_slash
+          imp_comma
+          imp_period
+          imp_equals
+          imp_more
+          imp_less
+          imp_identifier
+          imp_keyword
+          imp_integer
+
+        - Each of those functions return 1 (true), if it recognized the corresponding token, and 0 (false) if not.
+          Also, it accepts the optional pointer to imp_token, which is the struct containing information about this
+          token, you might use it to display informative errors, or whatever you want.
+*/
+
+
 #include <stdint.h>
+#include <string.h>
 
 typedef struct
 {
@@ -164,9 +236,9 @@ static int imp_ascii_is_hex(char c) { return (('0' <= c) && (c <= '9')) || (('a'
 static int imp_ascii_to_oct(char c) { return (c - '0'); }
 static int imp_ascii_to_dec(char c) { return (c - '0'); }
 static int imp_ascii_to_hex(char c) { return (('0' <= c) && (c <= '9')) ? (c - '0') :
-                                      (('a' <= c) && (c <= 'f')) ? (c - 'a') :
-                                      (('A' <= c) && (c <= 'F')) ? (c - 'A') :
-                                      0xff; }
+                                              (('a' <= c) && (c <= 'f')) ? (c - 'a') :
+                                              (('A' <= c) && (c <= 'F')) ? (c - 'A') :
+                                              0xff; }
 
 static int imp_ascii_is_valid_identifier_head(char c) { return (c == '_') || imp_ascii_is_alpha(c); }
 static int imp_ascii_is_valid_identifier_body(char c) { return (c == '_') || imp_ascii_is_alpha(c) || imp_ascii_is_digit(c); }
@@ -363,16 +435,17 @@ static imp_token imp_lexer_get_token(imp_lexer *lexer)
     {
         t.tag = IMP_TOKEN_IDENTIFIER;
         t.span.data = (char const *) (lexer->data + lexer->cursor);
-        imp_lexer_eat_char(lexer); /* Consume identifier head now, becuse consume_while
-                              might have predicate that does not include head character. */
-        t.span.size = imp_lexer_consume_while(lexer, imp_ascii_is_valid_identifier_body) + 1;
+        t.span.size = imp_lexer_consume_while(lexer, imp_ascii_is_valid_identifier_body);
 
         int32_t keyword_tag = imp_lexer_find_keyword(lexer, t.span);
         if (keyword_tag > IMP_TOKEN_INVALID)
+        {
             t.tag = keyword_tag;
+        }
     }
     else if (imp_ascii_is_digit(c))
     {
+        /* @todo: parse floats here too */
         t.tag = IMP_TOKEN_LITERAL_INTEGER;
         char const *s = (char const *) (lexer->data + lexer->cursor);
         uint32_t parsed_characters = imp_parse_integer(s, lexer->size - lexer->cursor, &t.integer_value);
@@ -380,7 +453,7 @@ static imp_token imp_lexer_get_token(imp_lexer *lexer)
         t.span.size = parsed_characters;
         lexer->cursor += parsed_characters;
     }
-    else
+    else /* @todo: parse string literals */
     {
         t.tag = c;
         t.span.data = (char const *) (lexer->data + lexer->cursor);
@@ -403,6 +476,7 @@ static imp_token imp_lexer_eat_token(imp_lexer *lexer)
 
 void imp_begin(char const *data, uint64_t size)
 {
+    memset(&imp_lexer_global, 0, sizeof(imp_lexer_global));
     imp_lexer_global.data = data;
     imp_lexer_global.size = size;
 }
@@ -411,32 +485,33 @@ static int imp_test_token(int tag, imp_token *result)
 {
     imp_token t = imp_lexer_get_token(&imp_lexer_global);
     if (t.tag != tag) return 0;
-    lexer_eat_token(imp_lexer_global);
+    imp_lexer_eat_token(&imp_lexer_global);
     if (result) *result = t;
     return 1;
 }
 
-int imp_eof(imp_token *t) { return imparser_token(IMP_TOKEN_EOF, t); }
-int imp_paren_open(imp_token *t) { return imparser_token('(', t); }
-int imp_paren_close(imp_token *t) { return imparser_token(')', t); }
-int imp_bracket_open(imp_token *t) { return imparser_token('[', t); }
-int imp_bracket_close(imp_token *t) { return imparser_token(']', t); }
-int imp_brace_open(imp_token *t) { return imparser_token('{', t); }
-int imp_brace_close(imp_token *t) { return imparser_token('}', t); }
-int imp_colon(imp_token *t) { return imparser_token(':', t); }
-int imp_semicolon(imp_token *t) { return imparser_token(';', t); }
-int imp_plus(imp_token *t) { return imparser_token('+', t); }
-int imp_minus(imp_token *t) { return imparser_token('-', t); }
-int imp_asterics(imp_token *t) { return imparser_token('*', t); }
-int imp_slash(imp_token *t) { return imparser_token('/', t); }
-int imp_comma(imp_token *t) { return imparser_token(',', t); }
-int imp_period(imp_token *t) { return imparser_token('.', t); }
-int imp_equals(imp_token *t) { return imparser_token('=', t); }
-int imp_more(imp_token *t) { return imparser_token('>', t); }
-int imp_less(imp_token *t) { return imparser_token('<', t); }
+int imp_eof(imp_token *t) { return imp_test_token(IMP_TOKEN_EOF, t); }
 
-int imp_identifier(imp_token *t);
-int imp_keyword(imp_token *t);
-int imp_integer(imp_token *t);
+int imp_paren_open(imp_token *t) { return imp_test_token('(', t); }
+int imp_paren_close(imp_token *t) { return imp_test_token(')', t); }
+int imp_bracket_open(imp_token *t) { return imp_test_token('[', t); }
+int imp_bracket_close(imp_token *t) { return imp_test_token(']', t); }
+int imp_brace_open(imp_token *t) { return imp_test_token('{', t); }
+int imp_brace_close(imp_token *t) { return imp_test_token('}', t); }
+int imp_colon(imp_token *t) { return imp_test_token(':', t); }
+int imp_semicolon(imp_token *t) { return imp_test_token(';', t); }
+int imp_plus(imp_token *t) { return imp_test_token('+', t); }
+int imp_minus(imp_token *t) { return imp_test_token('-', t); }
+int imp_asterics(imp_token *t) { return imp_test_token('*', t); }
+int imp_slash(imp_token *t) { return imp_test_token('/', t); }
+int imp_comma(imp_token *t) { return imp_test_token(',', t); }
+int imp_period(imp_token *t) { return imp_test_token('.', t); }
+int imp_equals(imp_token *t) { return imp_test_token('=', t); }
+int imp_more(imp_token *t) { return imp_test_token('>', t); }
+int imp_less(imp_token *t) { return imp_test_token('<', t); }
+
+int imp_identifier(imp_token *t) { return imp_test_token(IMP_TOKEN_IDENTIFIER, t); }
+int imp_keyword(imp_token *t) { return imp_test_token(IMP_TOKEN_KEYWORD, t); }
+int imp_integer(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_INTEGER, t); }
 
 #endif /* IMPARSER_IMPLEMENTATION */
