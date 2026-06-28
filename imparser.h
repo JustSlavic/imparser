@@ -55,7 +55,7 @@
           imp_semicolon
           imp_plus
           imp_minus
-          imp_asterics
+          imp_asterisk
           imp_slash
           imp_comma
           imp_period
@@ -167,7 +167,7 @@ int imp_colon(imp_token *t);
 int imp_semicolon(imp_token *t);
 int imp_plus(imp_token *t);
 int imp_minus(imp_token *t);
-int imp_asterics(imp_token *t);
+int imp_asterisk(imp_token *t);
 int imp_slash(imp_token *t);
 int imp_comma(imp_token *t);
 int imp_period(imp_token *t);
@@ -453,6 +453,31 @@ static imp_token imp_lexer_get_token(imp_lexer *lexer)
         t.span.size = parsed_characters;
         lexer->cursor += parsed_characters;
     }
+    else if (c == '"')
+    {
+        t.tag = IMP_TOKEN_LITERAL_STRING;
+        char const *s = (char const *) (lexer->data + lexer->cursor);
+        int saved_cursor = lexer->cursor;
+
+        imp_lexer_eat_char(lexer);
+
+        while (1)
+        {
+            c = imp_lexer_get_char(lexer);
+            if (c == 0 || imp_ascii_is_crlf(c))
+            {
+                /* @todo: report lexer error */
+                t.tag = IMP_TOKEN_INVALID;
+                break;
+            }
+            imp_lexer_eat_char(lexer);
+            if (c == '"') { break; }
+            if (c == '\\') { imp_lexer_eat_char(lexer); }
+        }
+
+        t.span.data = s;
+        t.span.size = lexer->cursor - saved_cursor;
+    }
     else /* @todo: parse string literals */
     {
         t.tag = c;
@@ -502,7 +527,7 @@ int imp_colon(imp_token *t) { return imp_test_token(':', t); }
 int imp_semicolon(imp_token *t) { return imp_test_token(';', t); }
 int imp_plus(imp_token *t) { return imp_test_token('+', t); }
 int imp_minus(imp_token *t) { return imp_test_token('-', t); }
-int imp_asterics(imp_token *t) { return imp_test_token('*', t); }
+int imp_asterisk(imp_token *t) { return imp_test_token('*', t); }
 int imp_slash(imp_token *t) { return imp_test_token('/', t); }
 int imp_comma(imp_token *t) { return imp_test_token(',', t); }
 int imp_period(imp_token *t) { return imp_test_token('.', t); }
@@ -513,5 +538,6 @@ int imp_less(imp_token *t) { return imp_test_token('<', t); }
 int imp_identifier(imp_token *t) { return imp_test_token(IMP_TOKEN_IDENTIFIER, t); }
 int imp_keyword(imp_token *t) { return imp_test_token(IMP_TOKEN_KEYWORD, t); }
 int imp_integer(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_INTEGER, t); }
+int imp_string(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_STRING, t); }
 
 #endif /* IMPARSER_IMPLEMENTATION */
