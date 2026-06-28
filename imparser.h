@@ -154,11 +154,11 @@ typedef struct
 } imp_lexer;
 
 typedef imp_lexer imp_checkpoint;
+typedef int imp_function(imp_token *);
 
 void imp_begin(char const *data, uint64_t size);
 
 int imp_eof(imp_token *t);
-
 int imp_paren_open(imp_token *t);
 int imp_paren_close(imp_token *t);
 int imp_bracket_open(imp_token *t);
@@ -176,13 +176,36 @@ int imp_period(imp_token *t);
 int imp_equals(imp_token *t);
 int imp_more(imp_token *t);
 int imp_less(imp_token *t);
-
 int imp_identifier(imp_token *t);
 int imp_keyword(imp_token *t);
 int imp_integer(imp_token *t);
 
+int imp_eof_peek(imp_token *t);
+int imp_paren_open_peek(imp_token *t);
+int imp_paren_close_peek(imp_token *t);
+int imp_bracket_open_peek(imp_token *t);
+int imp_bracket_close_peek(imp_token *t);
+int imp_brace_open_peek(imp_token *t);
+int imp_brace_close_peek(imp_token *t);
+int imp_colon_peek(imp_token *t);
+int imp_semicolon_peek(imp_token *t);
+int imp_plus_peek(imp_token *t);
+int imp_minus_peek(imp_token *t);
+int imp_asterisk_peek(imp_token *t);
+int imp_slash_peek(imp_token *t);
+int imp_comma_peek(imp_token *t);
+int imp_period_peek(imp_token *t);
+int imp_equals_peek(imp_token *t);
+int imp_more_peek(imp_token *t);
+int imp_less_peek(imp_token *t);
+int imp_identifier_peek(imp_token *t);
+int imp_keyword_peek(imp_token *t);
+int imp_integer_peek(imp_token *t);
+
+int imp_peek(imp_function *f, imp_token *t);
+
 imp_checkpoint imp_safe(void);
-void imp_rollback(imp_checkpoint checkpoint);
+void imp_restore(imp_checkpoint checkpoint);
 
 #endif /* IMPARSER_H_ */
 
@@ -422,7 +445,9 @@ static int32_t imp_lexer_find_keyword(imp_lexer *lexer, imp_span span)
 static imp_token imp_lexer_get_token(imp_lexer *lexer)
 {
     if (lexer->current_token_ok)
+    {
         return lexer->current_token;
+    }
 
     imp_lexer_consume_while(lexer, imp_ascii_is_whitespace);
 
@@ -517,22 +542,27 @@ void imp_begin(char const *data, uint64_t size)
 static int imp_test_token(int tag, imp_token *result)
 {
     imp_token t = imp_lexer_get_token(&imp_lexer_global);
-    if (t.tag != tag) return 0;
-    imp_lexer_eat_token(&imp_lexer_global);
-    if (result) *result = t;
-    return 1;
+    if (t.tag == tag)
+    {
+        imp_lexer_eat_token(&imp_lexer_global);
+        if (result) { *result = t; }
+        return 1;
+    }
+    return 0;
 }
 
 static int imp_peek_token(int tag, imp_token *result)
 {
     imp_token t = imp_lexer_get_token(&imp_lexer_global);
-    if (t.tag != tag) return 0;
-    if (result) *result = t;
-    return 1;
+    if (t.tag == tag)
+    {
+        if (result) { *result = t; }
+        return 1;
+    }
+    return 0;
 }
 
 int imp_eof(imp_token *t) { return imp_test_token(IMP_TOKEN_EOF, t); }
-
 int imp_paren_open(imp_token *t) { return imp_test_token('(', t); }
 int imp_paren_close(imp_token *t) { return imp_test_token(')', t); }
 int imp_bracket_open(imp_token *t) { return imp_test_token('[', t); }
@@ -550,18 +580,51 @@ int imp_period(imp_token *t) { return imp_test_token('.', t); }
 int imp_equals(imp_token *t) { return imp_test_token('=', t); }
 int imp_more(imp_token *t) { return imp_test_token('>', t); }
 int imp_less(imp_token *t) { return imp_test_token('<', t); }
-
 int imp_identifier(imp_token *t) { return imp_test_token(IMP_TOKEN_IDENTIFIER, t); }
 int imp_keyword(imp_token *t) { return imp_test_token(IMP_TOKEN_KEYWORD, t); }
 int imp_integer(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_INTEGER, t); }
 int imp_string(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_STRING, t); }
+
+int imp_eof_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_EOF, t); }
+int imp_paren_open_peek(imp_token *t) { return imp_peek_token('(', t); }
+int imp_paren_close_peek(imp_token *t) { return imp_peek_token(')', t); }
+int imp_bracket_open_peek(imp_token *t) { return imp_peek_token('[', t); }
+int imp_bracket_close_peek(imp_token *t) { return imp_peek_token(']', t); }
+int imp_brace_open_peek(imp_token *t) { return imp_peek_token('{', t); }
+int imp_brace_close_peek(imp_token *t) { return imp_peek_token('}', t); }
+int imp_colon_peek(imp_token *t) { return imp_peek_token(':', t); }
+int imp_semicolon_peek(imp_token *t) { return imp_peek_token(';', t); }
+int imp_plus_peek(imp_token *t) { return imp_peek_token('+', t); }
+int imp_minus_peek(imp_token *t) { return imp_peek_token('-', t); }
+int imp_asterisk_peek(imp_token *t) { return imp_peek_token('*', t); }
+int imp_slash_peek(imp_token *t) { return imp_peek_token('/', t); }
+int imp_comma_peek(imp_token *t) { return imp_peek_token(',', t); }
+int imp_period_peek(imp_token *t) { return imp_peek_token('.', t); }
+int imp_equals_peek(imp_token *t) { return imp_peek_token('=', t); }
+int imp_more_peek(imp_token *t) { return imp_peek_token('>', t); }
+int imp_less_peek(imp_token *t) { return imp_peek_token('<', t); }
+int imp_identifier_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_IDENTIFIER, t); }
+int imp_keyword_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_KEYWORD, t); }
+int imp_integer_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_LITERAL_INTEGER, t); }
+int imp_string_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_LITERAL_STRING, t); }
+
+int imp_peek(imp_function *f, imp_token *t)
+{
+    imp_checkpoint checkpoint = imp_safe();
+    int ok = f(t);
+    if (ok)
+    {
+        imp_restore(checkpoint);
+    }
+    return ok;
+}
 
 imp_checkpoint imp_safe(void)
 {
     return imp_lexer_global;
 }
 
-void imp_rollback(imp_checkpoint checkpoint)
+void imp_restore(imp_checkpoint checkpoint)
 {
     imp_lexer_global = checkpoint;
 }

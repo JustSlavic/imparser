@@ -19,14 +19,17 @@
 
 int parse_expression_operand(void)
 {
-    if (imp_identifier(NULL))
+    imp_token t;
+    if (imp_identifier(&t))
     {
         /* Variable */
+        printf("%.*s ", (int) t.span.size, t.span.data);
         return 1;
     }
-    else if (imp_integer(NULL))
+    else if (imp_integer(&t))
     {
         /* A number */
+        printf("%.*s ", (int) t.span.size, t.span.data);
         return 1;
     }
 
@@ -62,12 +65,13 @@ int parse_expression(int precedence)
     while (1)
     {
         int operator_precedence = 0;
-        /* @todo: save */
-        if (imp_plus(NULL) || imp_minus(NULL))
+        imp_checkpoint checkpoint = imp_safe();
+        imp_token operator;
+        if (imp_plus(&operator) || imp_minus(&operator))
         {
             operator_precedence = 1;
         }
-        else if (imp_asterisk(NULL) || imp_slash(NULL))
+        else if (imp_asterisk(&operator) || imp_slash(&operator))
         {
             operator_precedence = 2;
         }
@@ -80,7 +84,7 @@ int parse_expression(int precedence)
         if (operator_precedence < precedence)
         {
             /* Operator precedence requires for the rest of the expression be handled by the while loop higher up on the recursion. */
-            /* @todo: restore */
+            imp_restore(checkpoint);
             break;
         }
 
@@ -90,19 +94,21 @@ int parse_expression(int precedence)
             printf("Error: Could not parse right hand side of the expression.\n");
             return 0;
         }
+
+        printf("%.*s ", (int) operator.span.size, operator.span.data);
     }
 
     return 1;
 }
 
-static char const source_code[] = "x + (a * 140) / n";
+static char const source_code[] = "a + b * (140 - c) / 2 + d";
 
 int main()
 {
     imp_begin(source_code, sizeof(source_code));
 
     int success = parse_expression(0);
-    printf("end parse (%s)\n", success ? "success" : "failure");
+    printf("\nend parse (%s)\n", success ? "success" : "failure");
 
     return 0;
 }
