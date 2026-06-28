@@ -153,6 +153,8 @@ typedef struct
     uint32_t  keyword_count;
 } imp_lexer;
 
+typedef imp_lexer imp_checkpoint;
+
 void imp_begin(char const *data, uint64_t size);
 
 int imp_eof(imp_token *t);
@@ -178,6 +180,9 @@ int imp_less(imp_token *t);
 int imp_identifier(imp_token *t);
 int imp_keyword(imp_token *t);
 int imp_integer(imp_token *t);
+
+imp_checkpoint imp_safe(void);
+void imp_rollback(imp_checkpoint checkpoint);
 
 #endif /* IMPARSER_H_ */
 
@@ -236,8 +241,8 @@ static int imp_ascii_is_hex(char c) { return (('0' <= c) && (c <= '9')) || (('a'
 static int imp_ascii_to_oct(char c) { return (c - '0'); }
 static int imp_ascii_to_dec(char c) { return (c - '0'); }
 static int imp_ascii_to_hex(char c) { return (('0' <= c) && (c <= '9')) ? (c - '0') :
-                                              (('a' <= c) && (c <= 'f')) ? (c - 'a') :
-                                              (('A' <= c) && (c <= 'F')) ? (c - 'A') :
+                                              (('a' <= c) && (c <= 'f')) ? (c - 'a' + 10) :
+                                              (('A' <= c) && (c <= 'F')) ? (c - 'A' + 10) :
                                               0xff; }
 
 static int imp_ascii_is_valid_identifier_head(char c) { return (c == '_') || imp_ascii_is_alpha(c); }
@@ -421,7 +426,8 @@ static imp_token imp_lexer_get_token(imp_lexer *lexer)
 
     imp_lexer_consume_while(lexer, imp_ascii_is_whitespace);
 
-    imp_token t = {};
+    imp_token t;
+    memset(&t, 0, sizeof(t));
     t.tag = IMP_TOKEN_INVALID;
     t.line = lexer->line;
     t.column = lexer->column;
@@ -504,6 +510,8 @@ void imp_begin(char const *data, uint64_t size)
     memset(&imp_lexer_global, 0, sizeof(imp_lexer_global));
     imp_lexer_global.data = data;
     imp_lexer_global.size = size;
+    imp_lexer_global.line = 1;
+    imp_lexer_global.column = 1;
 }
 
 static int imp_test_token(int tag, imp_token *result)
@@ -511,6 +519,14 @@ static int imp_test_token(int tag, imp_token *result)
     imp_token t = imp_lexer_get_token(&imp_lexer_global);
     if (t.tag != tag) return 0;
     imp_lexer_eat_token(&imp_lexer_global);
+    if (result) *result = t;
+    return 1;
+}
+
+static int imp_peek_token(int tag, imp_token *result)
+{
+    imp_token t = imp_lexer_get_token(&imp_lexer_global);
+    if (t.tag != tag) return 0;
     if (result) *result = t;
     return 1;
 }
@@ -539,5 +555,15 @@ int imp_identifier(imp_token *t) { return imp_test_token(IMP_TOKEN_IDENTIFIER, t
 int imp_keyword(imp_token *t) { return imp_test_token(IMP_TOKEN_KEYWORD, t); }
 int imp_integer(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_INTEGER, t); }
 int imp_string(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_STRING, t); }
+
+imp_checkpoint imp_safe(void)
+{
+    return imp_lexer_global;
+}
+
+void imp_rollback(imp_checkpoint checkpoint)
+{
+    imp_lexer_global = checkpoint;
+}
 
 #endif /* IMPARSER_IMPLEMENTATION */
