@@ -15,7 +15,12 @@
     Then you should allocate nodes in parse_expression_operand,
     and in parse_expression right at the end of the loop, where
     the rhs of the expression is parsed succesfully.
+
+    This program uses Pratt's [?citation needed] algorithm to determine operator precedence.
+    It parses the expression and just prints it in the Reverse Polish Notation.
 */
+
+static char const source_code[] = "a + b * (140 - c) / 2 + d";
 
 int parse_expression_operand(void)
 {
@@ -100,8 +105,6 @@ int parse_expression(int precedence)
 
     return 1;
 }
-
-static char const source_code[] = "a + b * (140 - c) / 2 + d";
 
 int main()
 {

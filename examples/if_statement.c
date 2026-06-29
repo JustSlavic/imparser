@@ -5,8 +5,8 @@
 
 /*
     Here I typed in simple parser of an if statement.
-    It consists of recognizing the 'if' identifier (probably will change to keyword),
-    some condition identifier, and a block with a function call (no argument, no expressions, etc.)
+    It consists of recognizing the 'if' keyword, some condition identifier, and a block with a function
+    call (no argument, no expressions, etc.)
 
     This is not full-fledged language parsing, just a demonstration how you might use this library.
 
