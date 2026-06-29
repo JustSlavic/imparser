@@ -158,9 +158,9 @@ typedef int imp_function(imp_token *);
 
 void imp_begin(char const *data, uint64_t size);
 
-void imp_extend(char const *s, int tag);
+int imp_extend(char const *s, int tag);
 
-imp_checkpoint imp_safe(void);
+imp_checkpoint imp_save(void);
 void imp_restore(imp_checkpoint checkpoint);
 int imp_peek(imp_function *f, imp_token *t);
 
@@ -600,16 +600,13 @@ int imp_extension_peek(int tag, imp_token *t) { return imp_peek_token(imp_lexer_
 
 int imp_peek(imp_function *f, imp_token *t)
 {
-    imp_checkpoint checkpoint = imp_safe();
+    imp_checkpoint checkpoint = imp_save();
     int ok = f(t);
-    if (ok)
-    {
-        imp_restore(checkpoint);
-    }
+    imp_restore(checkpoint);
     return ok;
 }
 
-imp_checkpoint imp_safe(void)
+imp_checkpoint imp_save(void)
 {
     return imp_lexer_global;
 }
@@ -626,12 +623,21 @@ uint32_t cstring_size_no0(char const *cstring)
     return result;
 }
 
-void imp_extend(char const *s, int tag)
+int imp_extend(char const *s, int tag)
 {
-    imp_lexer_global.extensions[imp_lexer_global.extension_count].data = s;
-    imp_lexer_global.extensions[imp_lexer_global.extension_count].size = cstring_size_no0(s);
-    imp_lexer_global.extension_tags[imp_lexer_global.extension_count] = imp_lexer_extend_tag(tag);
-    imp_lexer_global.extension_count += 1;
+    if (imp_lexer_global.extension_count < (sizeof(imp_lexer_global.extensions) / sizeof(imp_lexer_global.extensions[0])))
+    {
+        imp_lexer_global.extensions[imp_lexer_global.extension_count].data = s;
+        imp_lexer_global.extensions[imp_lexer_global.extension_count].size = cstring_size_no0(s);
+        imp_lexer_global.extension_tags[imp_lexer_global.extension_count] = imp_lexer_extend_tag(tag);
+        imp_lexer_global.extension_count += 1;
+        return 1;
+    }
+    else
+    {
+        /* @todo: make a mechanism to report errors */
+        return 0;
+    }
 }
 
 #endif /* IMPARSER_IMPLEMENTATION */

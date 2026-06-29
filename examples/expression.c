@@ -65,7 +65,7 @@ int parse_expression(int precedence)
     while (1)
     {
         int operator_precedence = 0;
-        imp_checkpoint checkpoint = imp_safe();
+        imp_checkpoint checkpoint = imp_save();
         imp_token operator;
         if (imp_plus(&operator) || imp_minus(&operator))
         {
