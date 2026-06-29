@@ -115,7 +115,7 @@ enum
     IMP_TOKEN_LITERAL_FLOAT,
     IMP_TOKEN_LITERAL_STRING,
 
-    IMP_TOKEN_KEYWORD = 0x10000, /* 65536 */
+    IMP_TOKEN_EXTENSION = 0x10000, /* 65536 */
 };
 
 char const *token_tag_to_cstring(int tag);
@@ -148,15 +148,21 @@ typedef struct
     imp_token current_token;
     int       current_token_ok;
 
-    imp_span *keywords;
-    int32_t  *keyword_tags;
-    uint32_t  keyword_count;
+    imp_span extensions[32];
+    int32_t  extension_tags[32];
+    uint32_t extension_count;
 } imp_lexer;
 
 typedef imp_lexer imp_checkpoint;
 typedef int imp_function(imp_token *);
 
 void imp_begin(char const *data, uint64_t size);
+
+void imp_extend(char const *s, int tag);
+
+imp_checkpoint imp_safe(void);
+void imp_restore(imp_checkpoint checkpoint);
+int imp_peek(imp_function *f, imp_token *t);
 
 int imp_eof(imp_token *t);
 int imp_paren_open(imp_token *t);
@@ -177,8 +183,8 @@ int imp_equals(imp_token *t);
 int imp_more(imp_token *t);
 int imp_less(imp_token *t);
 int imp_identifier(imp_token *t);
-int imp_keyword(imp_token *t);
 int imp_integer(imp_token *t);
+int imp_string(imp_token *t);
 
 int imp_eof_peek(imp_token *t);
 int imp_paren_open_peek(imp_token *t);
@@ -199,13 +205,8 @@ int imp_equals_peek(imp_token *t);
 int imp_more_peek(imp_token *t);
 int imp_less_peek(imp_token *t);
 int imp_identifier_peek(imp_token *t);
-int imp_keyword_peek(imp_token *t);
 int imp_integer_peek(imp_token *t);
-
-int imp_peek(imp_function *f, imp_token *t);
-
-imp_checkpoint imp_safe(void);
-void imp_restore(imp_checkpoint checkpoint);
+int imp_string_peek(imp_token *t);
 
 #endif /* IMPARSER_H_ */
 
@@ -408,36 +409,23 @@ static int imp_lexer_consume_until(imp_lexer *lexer, imp_predicate_t *p)
     return count;
 }
 
-static int imp_lexer_eat_string(imp_lexer *lexer, const char *s, uint32_t n)
+static int imp_lexer_extend_tag(int tag)
 {
-    uint32_t count = 0;
-    char const *s1 = (char const *) (lexer->data + lexer->cursor);
-    while ((n != 0) && (*s && *s1 && (*s == *s1)))
-    {
-        if (n > 0) n -= 1;
-        s += 1;
-        s1 += 1;
-        count += 1;
-    }
-    if ((n == 0) || (*s == 0))
-    {
-        lexer->cursor += count;
-        return count;
-    }
-    return 0;
+    return (tag + 1) | IMP_TOKEN_EXTENSION;
 }
 
-static int32_t imp_lexer_find_keyword(imp_lexer *lexer, imp_span span)
+static int imp_lexer_contract_tag(int tag)
 {
-    uint32_t keyword_index;
-    for (keyword_index = 0;
-         keyword_index < lexer->keyword_count;
-         keyword_index++)
+    return (tag & ~IMP_TOKEN_EXTENSION) - 1;
+}
+
+static int imp_lexer_find_extension_tag(imp_lexer *lexer, imp_span span)
+{
+    int extension_index = 0;
+    for (; extension_index < lexer->extension_count; extension_index++)
     {
-        if (imp_span_is_equal(lexer->keywords[keyword_index], span))
-        {
-            return lexer->keyword_tags[keyword_index];
-        }
+        int match = imp_span_is_equal(span, lexer->extensions[extension_index]);
+        if (match) return lexer->extension_tags[extension_index];
     }
     return IMP_TOKEN_INVALID;
 }
@@ -468,11 +456,13 @@ static imp_token imp_lexer_get_token(imp_lexer *lexer)
         t.span.data = (char const *) (lexer->data + lexer->cursor);
         t.span.size = imp_lexer_consume_while(lexer, imp_ascii_is_valid_identifier_body);
 
-        int32_t keyword_tag = imp_lexer_find_keyword(lexer, t.span);
-        if (keyword_tag > IMP_TOKEN_INVALID)
+        printf("id:%d:%d\n", t.line, t.column);
+        int possible_extension_tag = imp_lexer_find_extension_tag(lexer, t.span);
+        if (possible_extension_tag > IMP_TOKEN_EXTENSION)
         {
-            t.tag = keyword_tag;
+            t.tag = imp_lexer_contract_tag(possible_extension_tag);
         }
+        printf("  -> id:%d:%d\n", t.line, t.column);
     }
     else if (imp_ascii_is_digit(c))
     {
@@ -581,7 +571,6 @@ int imp_equals(imp_token *t) { return imp_test_token('=', t); }
 int imp_more(imp_token *t) { return imp_test_token('>', t); }
 int imp_less(imp_token *t) { return imp_test_token('<', t); }
 int imp_identifier(imp_token *t) { return imp_test_token(IMP_TOKEN_IDENTIFIER, t); }
-int imp_keyword(imp_token *t) { return imp_test_token(IMP_TOKEN_KEYWORD, t); }
 int imp_integer(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_INTEGER, t); }
 int imp_string(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_STRING, t); }
 
@@ -604,7 +593,6 @@ int imp_equals_peek(imp_token *t) { return imp_peek_token('=', t); }
 int imp_more_peek(imp_token *t) { return imp_peek_token('>', t); }
 int imp_less_peek(imp_token *t) { return imp_peek_token('<', t); }
 int imp_identifier_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_IDENTIFIER, t); }
-int imp_keyword_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_KEYWORD, t); }
 int imp_integer_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_LITERAL_INTEGER, t); }
 int imp_string_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_LITERAL_STRING, t); }
 
@@ -627,6 +615,21 @@ imp_checkpoint imp_safe(void)
 void imp_restore(imp_checkpoint checkpoint)
 {
     imp_lexer_global = checkpoint;
+}
+
+uint32_t cstring_size_no0(char const *cstring)
+{
+    uint32_t result = 0;
+    if (cstring) while (*cstring++) result += 1;
+    return result;
+}
+
+void imp_extend(char const *s, int tag)
+{
+    imp_lexer_global.extensions[imp_lexer_global.extension_count].data = s;
+    imp_lexer_global.extensions[imp_lexer_global.extension_count].size = cstring_size_no0(s);
+    imp_lexer_global.extension_tags[imp_lexer_global.extension_count] = imp_lexer_extend_tag(tag);
+    imp_lexer_global.extension_count += 1;
 }
 
 #endif /* IMPARSER_IMPLEMENTATION */

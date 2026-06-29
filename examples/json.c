@@ -21,12 +21,16 @@ int parse_json(void)
     if (imp_brace_open(NULL))
     {
         /* This is an object { ... } */
-        while (true)
+        while (1)
         {
             if (!imp_string(NULL)) break;
+            printf("key - ok\n");
             if (!imp_colon(NULL)) { /* @todo: report error */ return 0; }
+            printf("colon - ok\n");
             if (!parse_json()) { /* @todo: report error */ return 0; }
+            printf("sub-json - ok\n");
             if (!imp_comma(NULL)) break;
+            printf("comma - ok\n");
         }
 
         if (imp_brace_close(NULL))
@@ -42,8 +46,8 @@ int main()
 {
     imp_begin(source_code, sizeof(source_code));
 
-    if (parse_json()) { printf("ok!\n"); }
-    printf("end parse.\n");
+    int ok = parse_json();
+    printf("end parse (%s)\n", ok ? "success" : "failure");
 
     return 0;
 }
