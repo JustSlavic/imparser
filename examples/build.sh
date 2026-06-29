@@ -5,8 +5,8 @@
 
 script_path=$(dirname -- "$( readlink -f -- "$0"; )")
 compiler="gcc"
-cc_flags="-std=c89"
-cc_warnings="-Wall -Werror -g3"
+cc_flags="-std=c89 -g"
+cc_warnings="-Wall -Werror"
 
 mkdir -p bin
 rm -rf $script_path/bin/*

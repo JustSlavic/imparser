@@ -13,6 +13,16 @@
     I intentionally used different styles to show that this library might adapt to your own style.
 */
 
+char const source_code[] =
+"if (condition) {\n"
+"    printf();\n"
+"}\n";
+
+enum
+{
+    TOKEN_IF = 1,
+};
+
 int parse_function_call(void)
 {
     if (imp_identifier(NULL) &&
@@ -36,69 +46,52 @@ int parse_block(void)
 int parse_if_statement(void)
 {
     imp_token ident, paren_open, paren_close;
-    if (imp_identifier(&ident))
+    if (imp_extension(TOKEN_IF, &ident))
     {
-        if (imp_span_is_equal(ident.span, (imp_span){ .data="if", .size=2 }))
+        if (imp_paren_open(&paren_open))
         {
-            if (imp_paren_open(&paren_open))
+            /*
+                You probably want to call into parse_expression here,
+                but because it's just an example, I haven't bother to
+                call it (the example of expression statement in another file).
+            */
+            imp_token condition;
+            if (imp_identifier(&condition))
             {
-                /*
-                    You probably want to call into parse_expression here,
-                    but because it's just an example, I haven't bother to
-                    call it (the example of expression statement in another file).
-                */
-                imp_token condition;
-                if (imp_identifier(&condition))
+                if (imp_paren_close(&paren_close))
                 {
-                    if (imp_paren_close(&paren_close))
+                    printf("if (%.*s)\n", (int) condition.span.size, condition.span.data);
+                    if (parse_block())
                     {
-                        printf("if (%.*s)\n", (int) condition.span.size, condition.span.data);
-                        if (parse_block())
-                        {
-                            printf("    { block }\n");
-                            return 1;
-                        }
-                        else
-                        {
-                            printf("Failed to parse {block}\n");
-                            return 0;
-                        }
+                        printf("    { block }\n");
+                        return 1;
                     }
                     else
                     {
-                        printf("There have to be a closing parenthesis, found %.*s instead at %d:%d\n", (int) paren_close.span.size, paren_close.span.data, paren_close.line, paren_close.column);
+                        printf("Failed to parse {block}\n");
                         return 0;
                     }
                 }
-            }
-            else
-            {
-                printf("There have to be an open parenthesis, found %.*s instead at %d:%d\n", (int) paren_open.span.size, paren_open.span.data, paren_open.line, paren_open.column);
-                return 0;
+                else
+                {
+                    printf("There have to be a closing parenthesis, found %.*s instead at %d:%d\n", (int) paren_close.span.size, paren_close.span.data, paren_close.line, paren_close.column);
+                    return 0;
+                }
             }
         }
         else
         {
+            printf("There have to be an open parenthesis, found %.*s instead at %d:%d\n", (int) paren_open.span.size, paren_open.span.data, paren_open.line, paren_open.column);
             return 0;
         }
     }
     else
     {
-        printf("Expected 'if' found %.*s at %d:%d\n", (int) ident.span.size, ident.span.data, ident.line, ident.column);
+        printf("Expected 'if' found '%.*s' at %d:%d\n", (int) ident.span.size, ident.span.data, ident.line, ident.column);
         return 0;
     }
     return 0;
 }
-
-char const source_code[] =
-"if (condition) {\n"
-"    printf();\n"
-"}\n";
-
-enum
-{
-    TOKEN_IF = 1,
-};
 
 int main()
 {

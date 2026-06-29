@@ -185,6 +185,7 @@ int imp_less(imp_token *t);
 int imp_identifier(imp_token *t);
 int imp_integer(imp_token *t);
 int imp_string(imp_token *t);
+int imp_extension(int tag, imp_token *t);
 
 int imp_eof_peek(imp_token *t);
 int imp_paren_open_peek(imp_token *t);
@@ -207,6 +208,7 @@ int imp_less_peek(imp_token *t);
 int imp_identifier_peek(imp_token *t);
 int imp_integer_peek(imp_token *t);
 int imp_string_peek(imp_token *t);
+int imp_extension_peek(int tag, imp_token *t);
 
 #endif /* IMPARSER_H_ */
 
@@ -456,13 +458,11 @@ static imp_token imp_lexer_get_token(imp_lexer *lexer)
         t.span.data = (char const *) (lexer->data + lexer->cursor);
         t.span.size = imp_lexer_consume_while(lexer, imp_ascii_is_valid_identifier_body);
 
-        printf("id:%d:%d\n", t.line, t.column);
         int possible_extension_tag = imp_lexer_find_extension_tag(lexer, t.span);
         if (possible_extension_tag > IMP_TOKEN_EXTENSION)
         {
-            t.tag = imp_lexer_contract_tag(possible_extension_tag);
+            t.tag = possible_extension_tag;
         }
-        printf("  -> id:%d:%d\n", t.line, t.column);
     }
     else if (imp_ascii_is_digit(c))
     {
@@ -532,10 +532,10 @@ void imp_begin(char const *data, uint64_t size)
 static int imp_test_token(int tag, imp_token *result)
 {
     imp_token t = imp_lexer_get_token(&imp_lexer_global);
+    if (result) { *result = t; }
     if (t.tag == tag)
     {
         imp_lexer_eat_token(&imp_lexer_global);
-        if (result) { *result = t; }
         return 1;
     }
     return 0;
@@ -544,9 +544,9 @@ static int imp_test_token(int tag, imp_token *result)
 static int imp_peek_token(int tag, imp_token *result)
 {
     imp_token t = imp_lexer_get_token(&imp_lexer_global);
+    if (result) { *result = t; }
     if (t.tag == tag)
     {
-        if (result) { *result = t; }
         return 1;
     }
     return 0;
@@ -573,6 +573,7 @@ int imp_less(imp_token *t) { return imp_test_token('<', t); }
 int imp_identifier(imp_token *t) { return imp_test_token(IMP_TOKEN_IDENTIFIER, t); }
 int imp_integer(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_INTEGER, t); }
 int imp_string(imp_token *t) { return imp_test_token(IMP_TOKEN_LITERAL_STRING, t); }
+int imp_extension(int tag, imp_token *t) { return imp_test_token(imp_lexer_extend_tag(tag), t); }
 
 int imp_eof_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_EOF, t); }
 int imp_paren_open_peek(imp_token *t) { return imp_peek_token('(', t); }
@@ -595,6 +596,7 @@ int imp_less_peek(imp_token *t) { return imp_peek_token('<', t); }
 int imp_identifier_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_IDENTIFIER, t); }
 int imp_integer_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_LITERAL_INTEGER, t); }
 int imp_string_peek(imp_token *t) { return imp_peek_token(IMP_TOKEN_LITERAL_STRING, t); }
+int imp_extension_peek(int tag, imp_token *t) { return imp_peek_token(imp_lexer_extend_tag(tag), t); }
 
 int imp_peek(imp_function *f, imp_token *t)
 {
