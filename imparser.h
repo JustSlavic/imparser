@@ -260,19 +260,21 @@ static int imp_ascii_is_uppercase_alpha(char c) { return ('A' <= c) && (c <= 'Z'
 static int imp_ascii_is_alpha(char c) { return imp_ascii_is_uppercase_alpha(c) || imp_ascii_is_lowercase_alpha(c); }
 static int imp_ascii_is_digit(char c) { return ('0' <= c) && (c <= '9'); }
 
+static int imp_ascii_is_valid_identifier_head(char c) { return (c == '_') || imp_ascii_is_alpha(c); }
+static int imp_ascii_is_valid_identifier_body(char c) { return (c == '_') || imp_ascii_is_alpha(c) || imp_ascii_is_digit(c); }
+
+static int imp_ascii_is_bin(char c) { return  (c == '0') || (c == '1'); }
 static int imp_ascii_is_oct(char c) { return  ('0' <= c) && (c <= '7'); }
 static int imp_ascii_is_dec(char c) { return  ('0' <= c) && (c <= '9'); }
 static int imp_ascii_is_hex(char c) { return (('0' <= c) && (c <= '9')) || (('a' <= c) && (c <= 'f')) || (('A' <= c) && (c <= 'F')); }
 
+static int imp_ascii_to_bin(char c) { return (c - '0'); }
 static int imp_ascii_to_oct(char c) { return (c - '0'); }
 static int imp_ascii_to_dec(char c) { return (c - '0'); }
 static int imp_ascii_to_hex(char c) { return (('0' <= c) && (c <= '9')) ? (c - '0') :
                                               (('a' <= c) && (c <= 'f')) ? (c - 'a' + 10) :
                                               (('A' <= c) && (c <= 'F')) ? (c - 'A' + 10) :
                                               0xff; }
-
-static int imp_ascii_is_valid_identifier_head(char c) { return (c == '_') || imp_ascii_is_alpha(c); }
-static int imp_ascii_is_valid_identifier_body(char c) { return (c == '_') || imp_ascii_is_alpha(c) || imp_ascii_is_digit(c); }
 
 int imp_span_is_equal(imp_span s1, imp_span s2)
 {
@@ -285,74 +287,104 @@ int imp_span_is_equal(imp_span s1, imp_span s2)
     return 1;
 }
 
+static uint32_t imp_parse_sign(char const *data, uint64_t size, int64_t *result)
+{
+    if ((size > 0) && (data[0] == '+')) { *result = 1;  return 1; }
+    if ((size > 0) && (data[1] == '-')) { *result = -1; return 1; }
+    return 0;
+}
+
+static uint32_t imp_parse_base(char const *data, uint64_t size, int64_t *result)
+{
+    if ((size > 2) && (data[0] == '0') && ((data[1] == 'x') || (data[1] == 'X')) && imp_ascii_is_hex(data[2]))
+    {
+        *result = 16;
+        return 2;
+    }
+    if ((size > 2) && (data[0] == '0') && ((data[1] == 'b') || (data[1] == 'B')) && imp_ascii_is_bin(data[2]))
+    {
+        *result = 2;
+        return 2;
+    }
+    if ((size > 2) && (data[0] == '0') && ((data[1] == 'o') || (data[1] == 'O')) && imp_ascii_is_oct(data[2]))
+    {
+        *result = 8;
+        return 2;
+    }
+    if ((size > 1) && (data[0] == '0') && imp_ascii_is_oct(data[1]))
+    {
+        *result = 8;
+        return 1;
+    }
+    if (imp_ascii_is_dec(data[0]))
+    {
+        *result = 10;
+        return 0;
+    }
+    *result = 0;
+    return 0;
+}
+
 static uint32_t imp_parse_integer(char const *data, uint64_t size, int64_t *result)
 {
-    char c = data[0];
-    if (c == '0')
+    uint64_t index = 0;
+    int64_t sign = 1;
+    int64_t base = 0;
+    int64_t integer = 0;
+
+    index += imp_parse_sign(data + index, size - index, &sign);
+    index += imp_parse_base(data + index, size - index, &base);
+
+    if (base == 0) return 0;
+
+    if (base == 16)
     {
-        /* Either octal or hex */
-        if (data[1] == 'x')
+        for (; index < size; index++)
         {
-            if (size < 3)
-            {
-                /* '0x' is not acceptable string. */
-                return 0;
-            }
-            /* Hex */
-            int64_t n = 0;
-            int32_t i = 2;
-
-            for (; i < size; i++)
-            {
-                c = data[i];
-                if (!imp_ascii_is_hex(c)) break;
-
-                n *= 16;
-                n += imp_ascii_to_hex(c);
-            }
-
-            *result = n;
-            return i;
-        }
-        else
-        {
-            /* Oct */
-            int64_t n = 0;
-            int32_t i = 1;
-
-            for (; i < size; i++)
-            {
-                c = data[i];
-                if (!imp_ascii_is_oct(c)) break;
-
-                n *= 8;
-                n += imp_ascii_to_oct(c);
-            }
-
-            *result = n;
-            return i;
+            char c = data[index];
+            if (!imp_ascii_is_hex(c)) break;
+            integer *= 16;
+            integer += imp_ascii_to_hex(c);
         }
     }
-    else if (imp_ascii_is_digit(c))
+    else if (base == 10)
     {
-        /* Decimal */
-        int64_t n = 0;
-        int32_t i = 0;
-
-        for (; i < size; i++)
+        for (; index < size; index++)
         {
-            char c = data[i];
+            char c = data[index];
             if (!imp_ascii_is_dec(c)) break;
-
-            n *= 10;
-            n += imp_ascii_to_dec(c);
+            integer *= 10;
+            integer += imp_ascii_to_dec(c);
         }
-
-        *result = n;
-        return i;
+    }
+    else if (base == 8)
+    {
+        for (; index < size; index++)
+        {
+            char c = data[index];
+            if (!imp_ascii_is_oct(c))
+            integer *= 8;
+            integer += imp_ascii_to_oct(c);
+        }
+    }
+    else if (base == 2)
+    {
+        for (; index < size; index++)
+        {
+            char c = data[index];
+            if (!imp_ascii_is_bin(c)) break;
+            integer *= 2;
+            integer += imp_ascii_to_bin(c);
+        }
+    }
+    else
+    {
+        *result = 0;
+        return 0;
     }
 
-    return 0;
+    *result = integer;
+    return index;
 }
 
 static char imp_lexer_get_char(imp_lexer *lexer)
