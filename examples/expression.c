@@ -20,7 +20,7 @@
     It parses the expression and just prints it in the Reverse Polish Notation.
 */
 
-static char const source_code[] = "a + b * (140 - c) / 2 + d";
+static char const source_code[] = "a + b * (140 - c) / 0xa2 + d";
 
 int parse_expression_operand(void)
 {
